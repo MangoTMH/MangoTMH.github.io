@@ -23,7 +23,5 @@
 @media(max-width:1000px){.internship-areas{grid-template-columns:1fr;gap:12px}}
 @media(max-width:720px){.experience-role+.experience-role{margin-top:34px;padding-top:34px}.internship-areas{margin:22px 0}.role-type{align-self:flex-start}}
 
-/* Technical toolkit */
-.resume-button{color:var(--text);background:#0d1728}.resume-button:hover{border-color:var(--accent);color:var(--accent)}.toolkit-section{padding-block:96px;border-bottom:1px solid var(--border)}.toolkit-heading{display:flex;align-items:end;justify-content:space-between;gap:32px;margin-bottom:34px}.toolkit-heading h2{font-size:42px;margin-bottom:0}.toolkit-heading>p{font-size:14px;margin:0;max-width:420px}.toolkit-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}.toolkit-grid article{padding:28px;border:1px solid var(--border);border-radius:8px;background:#0d1728}.toolkit-grid article>span{font:11px monospace;color:var(--accent)}.toolkit-grid h3{font-size:20px;margin:9px 0 18px}.toolkit-grid .tags span{font-size:11px}
-@media(max-width:1000px){.toolkit-heading{align-items:flex-start;flex-direction:column;gap:16px}}
-@media(max-width:720px){.toolkit-section{padding-block:64px}.toolkit-heading h2{font-size:34px}.toolkit-grid{grid-template-columns:1fr;gap:14px}.toolkit-grid article{padding:23px}}
+/* Resume */
+.resume-button{color:var(--text);background:#0d1728}.resume-button:hover{border-color:var(--accent);color:var(--accent)}
