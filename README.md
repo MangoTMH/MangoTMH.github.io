@@ -4,7 +4,7 @@ A responsive, accessible static portfolio built with HTML, CSS and vanilla JavaS
 
 ## Edit content
 
-- `index.html`: biography, experience, projects, contact links and metadata.
+- `index.html`: biography, experience, featured project, interests, contact links and metadata.
 - `styles.css`: colors, layout, responsive styles and print styles.
 - `script.js`: mobile navigation and scroll behavior.
 
@@ -13,9 +13,8 @@ The supplied brief ends at “Beyond”. The interests section only uses the int
 ## Content awaiting your details
 
 - Email and LinkedIn use the details you supplied; GitHub links to MangoTMH.
-- Add your résumé PDF and replace the “Résumé / Coming soon” span with an anchor to that file.
-- Confirm whether the three proposed projects represent completed work. They are explicitly labeled illustrative concepts until confirmed. Replace contribution/outcome text with accurate, non-confidential details. No outcomes or metrics have been invented.
-- Add approved project screenshots when available; the existing diagrams are explicitly conceptual.
+- The recruiter-facing résumé PDF is stored at `assets/resume/Tan_Meng_Hong_Resume.pdf` and linked from the hero.
+- The featured project is based on the completed LLM emissions benchmarking application described in the supplied résumé. Replace the interface illustration with an approved screenshot later if desired.
 
 ## GitHub Pages
 

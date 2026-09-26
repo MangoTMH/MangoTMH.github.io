@@ -10,3 +10,14 @@ Logos and rank artwork belong to Riot Games. Used to identify games and personal
   Source data: https://valorant-api.com/v1/competitivetiers
 
 Ranks are self-reported by Meng Hong. No current rank, season, region, queue, percentile or professional competition claim is made.
+
+## Other game logos
+
+- `counter-strike-2.svg`: Counter-Strike mark from Simple Icons, https://simpleicons.org/?q=counter
+  Official game site: https://www.counter-strike.net/
+- `pubg.svg`: PUBG mark from Simple Icons, https://simpleicons.org/?q=pubg
+  Official game site: https://pubg.com/
+- `overwatch.png`: official Overwatch wordmark from Blizzard, https://overwatch.blizzard.com/
+- `hearthstone.png`: official Hearthstone wordmark from Blizzard, https://hearthstone.blizzard.com/
+
+PUBG, PLAYERUNKNOWN'S BATTLEGROUNDS and related logos are trademarks of PUBG Corporation or its affiliates. The marks on this page identify games Meng Hong plays; no endorsement is implied.
