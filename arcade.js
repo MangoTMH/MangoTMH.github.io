@@ -12,7 +12,8 @@
   const fresh = () => ({balance:1000, peak:1000, rounds:0, wins:0, records:[], pending:null});
   let state = fresh(), persistent = true;
   try { const s=JSON.parse(localStorage.getItem(key)); if(s && Number.isFinite(s.balance) && s.balance>=0 && s.balance<=1e8 && Number.isFinite(s.peak) && s.peak>=1000 && s.peak<=1e8 && Number.isInteger(s.rounds) && s.rounds>=0 && Number.isInteger(s.wins) && s.wins>=0 && Array.isArray(s.records)) state={...fresh(),...s}; } catch { persistent=false; }
-  let game='blackjack', active=null, busy=false;
+  let game='blackjack', active=null, busy=false, acting=false, roulette=null;
+  const wait=ms=>new Promise(resolve=>setTimeout(resolve,globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches?0:ms));
   const fmt = n => Number(n).toLocaleString('en-US',{maximumFractionDigits:2});
   function save(){try{localStorage.setItem(key,JSON.stringify(state));}catch{persistent=false;}}
   // Stakes are deducted before a round, so reloading cannot refund a losing hand.
@@ -29,25 +30,59 @@
     <div class="arcade-footer"><span id="storage-note">Free play · No cash value</span><button id="reset">Finish run & reset</button></div><noscript>Enable JavaScript to play.</noscript>`;
   const $ = id=>host.querySelector('#'+id);
   function wallet(){ $('tokens').textContent=fmt(state.balance);$('peak').textContent=fmt(state.peak);$('scores').replaceChildren();state.records.slice(0,5).forEach((r,i)=>{const li=document.createElement('li');li.textContent=`${i+1}. ${fmt(r.peak)} tokens · ${r.rounds} rounds`; $('scores').append(li);});if(!state.records.length){const li=document.createElement('li');li.textContent='Your first run starts here.';$('scores').append(li);}if(!persistent)$('storage-note').textContent='Session only · Storage unavailable';}
-  const rules={blackjack:'Get closer to 21 than the dealer without going over. Aces count as 1 or 11. Dealer stands on all 17s. Natural blackjack pays 3:2; other wins 1:1; ties return the stake. Hit or stand only; no splits, doubles or insurance. Fresh shuffled deck each round.',baccarat:'Bet on Player, Banker or Tie. Closest to 9 wins; tens and faces count as 0, aces as 1. Standard automatic third-card draws. Player pays 1:1, Banker 0.95:1, Tie 8:1. On a tie, Player/Banker stakes are returned. Fresh eight-deck shoe each round.',roulette:'Single-zero wheel: 0–36. Choose red, black, odd or even; wins pay 1:1. Zero loses all four bets. Every number has an equal chance. Payouts are profit in addition to your returned stake.'};
-  function choose(){ $('rules').textContent=rules[game]+' Leaving or reloading during a round forfeits its stake.';$('pick-label').hidden=game==='blackjack';$('pick').innerHTML=(game==='baccarat'?['Player','Banker','Tie']:['Red','Black','Odd','Even']).map(x=>`<option value="${x.toLowerCase()}">${x}</option>`).join('');$('deal').textContent=game==='roulette'?'Spin wheel':'Deal cards';$('game-table').innerHTML=game==='roulette'?'<div class="roulette-wheel"><span>◉</span></div><small>EUROPEAN · SINGLE ZERO</small>':'<div class="table-intro"><span>♠ <b>♥</b> ♣ <b>♦</b></span><small>'+ (game==='blackjack'?'CHASE 21':'CLOSEST TO NINE')+'</small></div>';host.querySelectorAll('[data-game]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.game===game)));}
-  function lock(on){busy=on;host.querySelectorAll('[data-game],#stake,#pick,#reset,#deal').forEach(b=>b.disabled=on);$('deal').hidden=on&&game==='blackjack';$('hit').hidden=$('stand').hidden=!(on&&game==='blackjack');}
+  const rules={blackjack:'Get closer to 21 than the dealer without going over. Aces count as 1 or 11. Dealer stands on all 17s. Natural blackjack pays 3:2; other wins 1:1; ties return the stake. Hit or stand only; no splits, doubles or insurance. Fresh shuffled deck each round.',baccarat:'Bet on Player, Banker or Tie. Closest to 9 wins; tens and faces count as 0, aces as 1. Standard automatic third-card draws. Player pays 1:1, Banker 0.95:1, Tie 8:1. On a tie, Player/Banker stakes are returned. Fresh eight-deck shoe each round.',roulette:'Single-zero wheel: 0–36. Straight 35:1; split 17:1; street and zero trio 11:1; corner and first four 8:1; six line 5:1; dozen and column 2:1; red/black, odd/even and low/high 1:1. These are profit odds; winning stakes are also returned. Zero loses every outside bet. Place multiple chips before spinning. Undo, clear or remove a bet before the spin; Rebet repeats the last set. All 37 numbers are equally likely.'};
+  function choose(){
+    host.dataset.outcome='';
+    $('rules').textContent=rules[game]+' Leaving or reloading during a round forfeits its stake.';
+    $('pick-label').hidden=game!=='baccarat';$('stake').closest('label').hidden=game==='roulette';
+    $('pick').innerHTML=['Player','Banker','Tie'].map(x=>'<option value="'+x.toLowerCase()+'">'+x+'</option>').join('');
+    $('deal').textContent=game==='roulette'?'Spin wheel':'Deal cards';host.dataset.game=game;
+    $('game-table').className='game-table '+(game==='roulette'?'roulette-surface':'card-surface');
+    if(game==='roulette')roulette=Roulette.create($('game-table'),{balance:()=>state.balance,busy:()=>busy,status:t=>{host.dataset.outcome='';$('game-status').textContent=t;},random:n=>random(n),wait,start:startRound,finish});
+    else {$('game-table').innerHTML='<div class="card-shoe" aria-hidden="true">MH</div><div class="table-intro"><span>♠ <b>♥</b> ♣ <b>♦</b></span><small>'+(game==='blackjack'?'BLACKJACK PAYS 3:2 · DEALER STANDS ON 17':'PLAYER · BANKER · TIE')+'</small><p>Select your stake and deal a hand.</p></div>';roulette=null;}
+    host.querySelectorAll('[data-game]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.game===game)));
+  }
+  function lock(on){busy=on;host.querySelectorAll('[data-game],#stake,#pick,#reset,#deal,#claim-score').forEach(b=>b.disabled=on);$('deal').hidden=on&&game==='blackjack';$('hit').hidden=$('stand').hidden=!(on&&game==='blackjack');$('hit').disabled=$('stand').disabled=acting;}
+  function startRound(stake){state.balance=Math.round((state.balance-stake)*100)/100;state.pending={stake,game};save();wallet();acting=true;lock(true);active={stake};host.dataset.outcome='';}
   function random(n){const a=new Uint32Array(1),limit=Math.floor(4294967296/n)*n;do{crypto.getRandomValues(a);}while(a[0]>=limit);return a[0]%n;}
   function deck(copies=1){const d=[];for(let c=0;c<copies;c++)for(const suit of ['♠','♥','♣','♦'])for(let r=1;r<=13;r++)d.push({r,suit});for(let i=d.length-1;i>0;i--){const j=random(i+1);[d[i],d[j]]=[d[j],d[i]];}return d;}
   function total(hand){let n=0,a=0;hand.forEach(c=>{n+=c.r===1?11:Math.min(c.r,10);if(c.r===1)a++;});while(n>21&&a-->0)n-=10;return n;}
   const bac=h=>h.reduce((n,c)=>n+(c.r>=10?0:c.r),0)%10;
-  function cards(h){return h.map(c=>`<span class="playing-card ${'♥♦'.includes(c.suit)?'red-card':''}">${['','A','2','3','4','5','6','7','8','9','10','J','Q','K'][c.r]}<small>${c.suit}</small></span>`).join('');}
-  function showHands(reveal=true){const {p,d}=active,score=game==='baccarat'?bac:total;$('game-table').innerHTML=`<div class="hand"><small>${game==='baccarat'?'BANKER':'DEALER'} · ${reveal?score(d):'?'}</small><div>${cards(reveal?d:[d[0]])}${reveal?'':'<span class="playing-card card-back">✦</span>'}</div></div><div class="hand"><small>${game==='baccarat'?'PLAYER':'YOU'} · ${score(p)}</small><div>${cards(p)}</div></div>`;}
-  function finish(returned,message){const net=Math.round((returned-active.stake)*100)/100;state.balance=Math.round((state.balance+returned)*100)/100;state.peak=Math.max(state.peak,state.balance);state.rounds++;if(net>0)state.wins++;state.pending=null;save();wallet();$('game-status').textContent=`${message} ${net>0?'+':''}${fmt(net)} tokens.${state.balance<10?' Finish this run to get 1,000 fresh tokens.':''}`;active=null;lock(false);recordBest();}
-  function stand(){if(!active||!busy)return;while(total(active.d)<17)active.d.push(active.deck.pop());showHands();const p=total(active.p),d=total(active.d);finish(d>21||p>d?active.stake*2:p===d?active.stake:0,d>21?'Dealer busts.':p>d?'You win.':p===d?'Push.':'Dealer wins.');}
-  $('hit').onclick=()=>{if(!active||!busy)return;active.p.push(active.deck.pop());showHands(false);if(total(active.p)>21){showHands();finish(0,'You bust.');}else if(total(active.p)===21)stand();};$('stand').onclick=stand;
-  $('deal').onclick=()=>{if(busy)return;const stake=Number($('stake').value);if(state.balance<stake){$('game-status').textContent='Not enough tokens. Choose a smaller stake or finish this run.';return;}state.balance-=stake;state.pending={stake,game};save();wallet();lock(true);active={stake};
-    if(game==='roulette'){const n=random(37),red=[1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36].includes(n),pick=$('pick').value;const win=n!==0&&(pick==='red'?red:pick==='black'?!red:pick==='odd'?n%2===1:n%2===0);$('game-table').innerHTML='<div class="roulette-wheel spinning"><span>◉</span></div><small>SPINNING…</small>';$('game-status').textContent='The wheel is spinning…';setTimeout(()=>{$('game-table').innerHTML=`<div class="roulette-wheel ${n===0?'zero':red?'red-wheel':'black-wheel'}"><span>${n}</span></div><small>${n===0?'ZERO':red?'RED':'BLACK'}</small>`;finish(win?stake*2:0,`${n} ${n===0?'green':red?'red':'black'}. ${win?'You win.':'No win this spin.'}`);},650);return;}
-    active.deck=deck(game==='baccarat'?8:1);active.p=[active.deck.pop(),active.deck.pop()];active.d=[active.deck.pop(),active.deck.pop()];
-    if(game==='blackjack'){showHands(false);const p=total(active.p),d=total(active.d);if(p===21||d===21){showHands();finish(p===d?stake:p===21?stake*2.5:0,p===d?'Both blackjack. Push.':p===21?'Blackjack!':'Dealer blackjack.');}else $('game-status').textContent='Your turn: hit for another card or stand.';return;}
-    let p=bac(active.p),b=bac(active.d);if(p<8&&b<8){let third=null;if(p<=5){const c=active.deck.pop();active.p.push(c);third=c.r>=10?0:c.r;}const draw=third===null?b<=5:b<=2||(b===3&&third!==8)||(b===4&&third>=2&&third<=7)||(b===5&&third>=4&&third<=7)||(b===6&&third>=6&&third<=7);if(draw)active.d.push(active.deck.pop());}p=bac(active.p);b=bac(active.d);const winner=p===b?'tie':p>b?'player':'banker',pick=$('pick').value;showHands();finish(winner===pick?stake*(winner==='tie'?9:winner==='banker'?1.95:2):winner==='tie'?stake:0,`${winner==='tie'?'Tie':winner==='player'?'Player wins':'Banker wins'} (${p}–${b}).`);
+  function cards(h,side){return h.map((c,i)=>{
+    const motion=active.motion?.side===side&&active.motion.index===i?active.motion.kind:'';
+    return '<span class="playing-card '+('♥♦'.includes(c.suit)?'red-card ':'')+motion+'"><span>'+['','A','2','3','4','5','6','7','8','9','10','J','Q','K'][c.r]+'</span><small>'+c.suit+'</small></span>';
+  }).join('');}
+  function showHands(reveal=true){
+    const p=active.p.slice(0,active.shownP),d=active.d.slice(0,active.shownD),score=game==='baccarat'?bac:total;
+    const hiddenCard=!reveal&&d.length>1?'<span class="playing-card card-back '+(active.motion?.side==='d'&&active.motion.index===1?'dealt-card':'')+'" aria-label="Face-down card">✦</span>':'';
+    $('game-table').innerHTML='<div class="card-shoe" aria-hidden="true">MH</div><div class="hand"><small>'+(game==='baccarat'?'BANKER':'DEALER')+' <b>'+(reveal?score(d):'?')+'</b></small><div>'+cards(reveal?d:d.slice(0,1),'d')+hiddenCard+'</div></div><div class="felt-mark" aria-hidden="true">'+(game==='blackjack'?'BLACKJACK · PAYS 3:2':'BACCARAT · CLOSEST TO NINE')+'</div><div class="hand"><small>'+(game==='baccarat'?'PLAYER':'YOU')+' <b>'+score(p)+'</b></small><div>'+cards(p,'p')+'</div></div>';
+    active.motion=null;
+  }
+  async function showNext(side,reveal){active[side==='p'?'shownP':'shownD']++;active.motion={side,index:active[side==='p'?'shownP':'shownD']-1,kind:'dealt-card'};showHands(reveal);await wait(330);}
+  function finish(returned,message){const net=Math.round((returned-active.stake)*100)/100;state.balance=Math.round((state.balance+returned)*100)/100;state.peak=Math.max(state.peak,state.balance);state.rounds++;if(net>0)state.wins++;state.pending=null;save();wallet();$('game-status').textContent=message+' '+(net>0?'+':'')+fmt(net)+' tokens.'+(state.balance<1?' Finish this run to get 1,000 fresh tokens.':'');host.dataset.outcome=net>0?'win':net<0?'loss':'push';active=null;acting=false;lock(false);recordBest();}
+  async function stand(){
+    if(!active||!busy||acting)return;acting=true;lock(true);$('game-status').textContent='Dealer reveals…';active.motion={side:'d',index:1,kind:'flipped-card'};showHands();await wait(650);
+    while(total(active.d)<17){active.d.push(active.deck.pop());await showNext('d',true);}
+    const p=total(active.p),d=total(active.d);await wait(350);finish(d>21||p>d?active.stake*2:p===d?active.stake:0,d>21?'Dealer busts.':p>d?'You win.':p===d?'Push.':'Dealer wins.');
+  }
+  $('hit').onclick=async()=>{
+    if(!active||!busy||acting)return;acting=true;lock(true);active.p.push(active.deck.pop());await showNext('p',false);
+    if(total(active.p)>21){active.motion={side:'d',index:1,kind:'flipped-card'};showHands();await wait(450);finish(0,'You bust.');}
+    else if(total(active.p)===21){acting=false;await stand();}else{acting=false;lock(true);}
+  };$('stand').onclick=stand;
+  $('deal').onclick=async()=>{
+    if(busy)return;if(game==='roulette'){await roulette.spin();return;}
+    const stake=Number($('stake').value);if(state.balance<stake){$('game-status').textContent='Not enough tokens. Choose a smaller stake or finish this run.';return;}
+    startRound(stake);$('game-status').textContent='Dealing…';active.deck=deck(game==='baccarat'?8:1);active.p=[active.deck.pop(),active.deck.pop()];active.d=[active.deck.pop(),active.deck.pop()];active.shownP=active.shownD=0;
+    for(const side of ['p','d','p','d'])await showNext(side,game==='baccarat');
+    if(game==='blackjack'){
+      const p=total(active.p),d=total(active.d);if(p===21||d===21){active.motion={side:'d',index:1,kind:'flipped-card'};showHands();await wait(650);finish(p===d?stake:p===21?stake*2.5:0,p===d?'Both blackjack. Push.':p===21?'Blackjack!':'Dealer blackjack.');}
+      else {acting=false;lock(true);$('game-status').textContent='Your turn: hit for another card or stand.';}return;
+    }
+    let p=bac(active.p),b=bac(active.d);if(p<8&&b<8){let third=null;if(p<=5){$('game-status').textContent='Player draws a third card…';const c=active.deck.pop();active.p.push(c);third=c.r>=10?0:c.r;await showNext('p',true);}const draw=third===null?b<=5:b<=2||(b===3&&third!==8)||(b===4&&third>=2&&third<=7)||(b===5&&third>=4&&third<=7)||(b===6&&third>=6&&third<=7);if(draw){$('game-status').textContent='Banker draws a third card…';active.d.push(active.deck.pop());await showNext('d',true);}}
+    p=bac(active.p);b=bac(active.d);const winner=p===b?'tie':p>b?'player':'banker',pick=$('pick').value;await wait(500);finish(winner===pick?stake*(winner==='tie'?9:winner==='banker'?1.95:2):winner==='tie'?stake:0,(winner==='tie'?'Tie':winner==='player'?'Player wins':'Banker wins')+' ('+p+'–'+b+').');
   };
-  host.querySelectorAll('[data-game]').forEach(b=>b.onclick=()=>{if(busy)return;game=b.dataset.game;choose();$('game-status').textContent='Choose a stake and play a round.';});
+  host.querySelectorAll('[data-game]').forEach(b=>b.onclick=()=>{if(busy)return;game=b.dataset.game;choose();$('game-status').textContent=game==='roulette'?'Choose a chip, place your bets, then spin.':'Choose a stake and play a round.';});
   function resetRun(message=''){const records=state.records;if(state.rounds)records.push({peak:state.peak,rounds:state.rounds});records.sort((a,b)=>b.peak-a.peak);state={...fresh(),records:records.slice(0,5)};save();wallet();choose();$('game-status').textContent=message+' New run. Your 1,000 tokens are ready.';}
   $('reset').onclick=()=>{if(busy||sending)return;recordBest();if(hasUnsubmittedBest()){openScorePrompt(true);}else resetRun(profile.submitted>1000?'Your submitted best is already saved online.':'No qualifying score yet — beat 1,000 tokens to join the leaderboard.');};
 
