@@ -48,7 +48,8 @@
     let p=bac(active.p),b=bac(active.d);if(p<8&&b<8){let third=null;if(p<=5){const c=active.deck.pop();active.p.push(c);third=c.r>=10?0:c.r;}const draw=third===null?b<=5:b<=2||(b===3&&third!==8)||(b===4&&third>=2&&third<=7)||(b===5&&third>=4&&third<=7)||(b===6&&third>=6&&third<=7);if(draw)active.d.push(active.deck.pop());}p=bac(active.p);b=bac(active.d);const winner=p===b?'tie':p>b?'player':'banker',pick=$('pick').value;showHands();finish(winner===pick?stake*(winner==='tie'?9:winner==='banker'?1.95:2):winner==='tie'?stake:0,`${winner==='tie'?'Tie':winner==='player'?'Player wins':'Banker wins'} (${p}–${b}).`);
   };
   host.querySelectorAll('[data-game]').forEach(b=>b.onclick=()=>{if(busy)return;game=b.dataset.game;choose();$('game-status').textContent='Choose a stake and play a round.';});
-  $('reset').onclick=()=>{if(busy)return;const records=state.records;if(state.rounds)records.push({peak:state.peak,rounds:state.rounds});records.sort((a,b)=>b.peak-a.peak);state={...fresh(),records:records.slice(0,5)};save();wallet();choose();$('game-status').textContent='New run. Your 1,000 tokens are ready.';};
+  function resetRun(message=''){const records=state.records;if(state.rounds)records.push({peak:state.peak,rounds:state.rounds});records.sort((a,b)=>b.peak-a.peak);state={...fresh(),records:records.slice(0,5)};save();wallet();choose();$('game-status').textContent=message+' New run. Your 1,000 tokens are ready.';}
+  $('reset').onclick=()=>{if(busy||sending)return;recordBest();if(hasUnsubmittedBest()){openScorePrompt(true);}else resetRun(profile.submitted>1000?'Your submitted best is already saved online.':'No qualifying score yet — beat 1,000 tokens to join the leaderboard.');};
 
   const API='https://menghong-minigames-leaderboard.menghong20.chatgpt.site/api/leaderboard';
   const profileKey='mh-arcade-profile-v1';
@@ -58,11 +59,23 @@
   saveProfile();
   let board=null,loading=false,sending=false;
   const scoreForm=document.getElementById('score-form'),nickname=document.getElementById('nickname'),submission=document.getElementById('submission-status'),boardHost=document.getElementById('global-scores');
+  const scoreDialog=document.createElement('dialog');scoreDialog.id='score-dialog';scoreDialog.setAttribute('aria-labelledby','score-dialog-title');
+  scoreDialog.innerHTML='<h3 id="score-dialog-title">Save your high score</h3><p id="score-dialog-note"></p><div id="score-dialog-content"></div><div class="score-dialog-actions"><button type="button" id="keep-playing">Keep playing</button><button type="button" id="skip-score">Reset without submitting</button></div>';
+  section.append(scoreDialog);scoreDialog.querySelector('#score-dialog-content').append(scoreForm,submission);
+  const claim=document.createElement('button');claim.id='claim-score';claim.type='button';claim.textContent='Save high score';claim.hidden=true;$('reset').before(claim);
+  let resetAfterSave=false;
+  function hasUnsubmittedBest(){return profile.rounds>0 && profile.best>Math.max(1000,profile.submitted);}
+  function openScorePrompt(reset){resetAfterSave=reset;qualify();submission.textContent='';scoreDialog.querySelector('#skip-score').hidden=!reset;scoreDialog.querySelector('#score-dialog-note').textContent='Your best of '+fmt(profile.best)+' tokens has not been submitted. Enter a nickname to save it online.';scoreForm.hidden=false;scoreForm.querySelector('button').textContent=reset?'Save score & start new run':'Submit high score';scoreDialog.showModal();nickname.focus();}
+  claim.onclick=()=>{if(!busy&&!sending)openScorePrompt(false);};
+  scoreDialog.querySelector('#keep-playing').onclick=()=>{if(!sending)scoreDialog.close();};
+  scoreDialog.querySelector('#skip-score').onclick=()=>{if(sending)return;scoreDialog.close();resetRun('Your best is kept in this browser only. Use Save high score to submit it later.');};
+  scoreDialog.addEventListener('cancel',e=>{if(sending)e.preventDefault();});
   nickname.value=typeof profile.nickname==='string'?profile.nickname:'';
   async function request(options){const r=await fetch(API,{...options,signal:AbortSignal.timeout(12000)});const data=await r.json();if(!r.ok)throw new Error(data.error||'The leaderboard is unavailable. Please try again.');return data;}
   function qualify(){
-    const eligible=board!==null && profile.rounds>0 && profile.best>Math.max(1000,profile.submitted) && (board.length<10 || profile.best>board[9].score);
+    const eligible=hasUnsubmittedBest();
     scoreForm.hidden=!eligible;
+    claim.hidden=!eligible;
     document.getElementById('qualifying-score').textContent=fmt(profile.best)+' tokens — your best balance so far.';
   }
   function renderBoard(){
@@ -83,8 +96,8 @@
     const name=nickname.value.trim();if(!/^[\p{L}\p{N}][\p{L}\p{N} _.-]{1,19}$/u.test(name)){submission.textContent='Use 2–20 letters, numbers, spaces, underscores, dots or hyphens.';return;}
     sending=true;const button=scoreForm.querySelector('button');button.disabled=true;submission.textContent='Saving your high score…';
     const score=profile.best,rounds=profile.rounds;
-    try{const result=await request({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nickname:name,score,rounds,token:profile.token})});profile.submitted=Math.max(profile.submitted,score);profile.nickname=name;saveProfile();submission.textContent=result.rank<=10?'You’re on the board! Current rank: #'+result.rank+'.':'Best score saved. The top ten moved ahead — keep playing!';await refresh();qualify();}
-    catch(error){submission.textContent=error.name==='TimeoutError'?'The request timed out. Your score is saved here; please try submitting again.':error.message;}
+    try{const result=await request({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nickname:name,score,rounds,token:profile.token})});if(result.saved!==true||!Number.isInteger(result.rank))throw new Error('Saving could not be confirmed. Please try again.');profile.submitted=Math.max(profile.submitted,score);profile.nickname=name;saveProfile();const message=result.rank<=10?'Saved online! Your best is '+fmt(score)+' tokens. Current rank: #'+result.rank+'.':'Saved online! Your best is '+fmt(score)+' tokens. Keep playing to reach the top ten.';submission.textContent=message;scoreDialog.close();if(resetAfterSave)resetRun(message);else $('game-status').textContent=message;await refresh();qualify();}
+    catch(error){submission.textContent='Not saved online. '+(error.name==='TimeoutError'?'The request timed out.':error.message)+' Your best is still kept in this browser; please try again.';}
     finally{sending=false;button.disabled=false;}
   });
   document.getElementById('refresh-scores').onclick=()=>{document.getElementById('refresh-scores').textContent='Refresh scores';refresh();};

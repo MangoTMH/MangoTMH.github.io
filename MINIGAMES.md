@@ -16,3 +16,5 @@ The portfolio and games are static GitHub Pages files. `arcade.js` adds the hero
 ## Verification
 
 Run `node --test --test-isolation=none tests/arcade.test.cjs` (Node 22+). These tests exercise real game handlers with controlled card draws, payout edge cases, duplicate-click protection, resets, qualification and submission retries. Backend tests live in the service checkout and use an in-memory SQLite database. Production is not seeded with test scores.
+
+Finishing a run with an unsubmitted best above 1,000 opens a nickname dialog. The wallet resets only after a confirmed server save or an explicit skip. Failed saves preserve the run and nickname for retry. Save high score also submits a retained best from earlier runs, even if leaderboard loading is unavailable.
