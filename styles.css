@@ -32,3 +32,8 @@
 
 /* Matching sport illustrations */
 .sport-icon{display:block;width:40px;height:40px;flex-shrink:0;object-fit:contain}.basketball-feature h3{display:flex;align-items:center;gap:14px;margin:14px 0}.basketball-icon{width:48px;height:48px}.sports-list li{flex-direction:column;justify-content:center;gap:12px;padding:20px 10px;text-align:center}.sports-list .sport-icon{width:40px;height:40px}@media(max-width:720px){.sports-list li{padding:18px 10px}.basketball-icon{width:42px;height:42px}}
+
+.socials a{display:inline-flex;align-items:center;gap:8px;min-height:32px}.socials img{display:block;width:20px;height:20px;flex-shrink:0}.socials a>span{font-size:12px}
+
+.company-logo{display:inline-flex;align-items:center;justify-content:center;min-height:64px;padding:14px 18px;background:#fff;border-radius:7px;margin-bottom:22px}.company-logo img{display:block;max-width:200px;width:auto;height:auto;max-height:42px;object-fit:contain}.internship-role .company-logo img{max-width:150px}@media(max-width:720px){.company-logo{min-height:58px;padding:12px 16px}.company-logo img{max-width:180px}}
+.internship-role .company-logo{background:#12303d;border:1px solid #2e5263}
